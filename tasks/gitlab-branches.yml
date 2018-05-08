@@ -1,0 +1,42 @@
+---
+# Does the branch exist?
+- name: Check if branch {{ branch.name }} exists in the Gitlab Project
+  uri:
+    url: "{{ gl_url }}/api/v4/projects/{{ gl_prj_id }}/repository/branches/{{ branch.name }}?private_token={{ gl_token }}"
+    method: "GET"
+    validate_certs: "{{ gl_validate_certs }}"
+    status_code: "200,404"
+  register: gl_branch_exists
+  until: (gl_branch_exists.status == 200) or
+         (gl_branch_exists.status == 404)
+  retries: 5
+  delay: 5
+
+# Create the branch if it doesn't exist
+- name: Create the {{ branch.name }} branch in the Gitlab Project
+  uri:
+    url: "{{ gl_url }}/api/v4/projects/{{ gl_prj_id }}/repository/branches?private_token={{ gl_token }}"
+    body_format: "raw"
+    method: "POST"
+    validate_certs: "{{ gl_validate_certs }}"
+    body: "branch={{ branch.name }}&ref={{ gl_prj_def_branch }}"
+    status_code: "201"
+  register: create_branch
+  until: create_branch.status == 201
+  retries: 5
+  delay: 5
+  changed_when: "create_branch.status == 201"
+  when: gl_branch_exists.status == 404
+
+# Check if the branch is protected
+- name: Protect branch {{ branch.name }} as specified
+  uri:
+    url: "{{ gl_url }}/api/v4/projects/{{ gl_prj_id }}/repository/branches/{{ branch.name }}/protect?private_token={{ gl_token }}"
+    method: "PUT"
+    validate_certs: "{{ gl_validate_certs }}"
+    status_code: "200"
+    register: branch_protect
+    until: branch_protect.status == 200
+    retries: 5
+    delay: 5
+  when: branch.protect

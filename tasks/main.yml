@@ -1,0 +1,114 @@
+---
+- name: Bring in vaulted Gitlab secrets
+  include_vars: vars/gitlab-secrets.yml
+  when: gl_secrets
+  no_log: True
+
+# Lookup Gitlab group to pass to project creation
+- name: Get Gitlab Group ID
+  uri:
+    url: "{{ gl_url }}/api/v4/groups?private_token={{ gl_token }}&search={{ gl_prj_group }}"
+    method: "GET"
+    validate_certs: "{{ gl_validate_certs }}"
+    status_code: "200"
+  register: gl_group_obj
+  until: gl_group_obj.status == 200
+  retries: 5
+  delay: 5
+
+# Check if Gitlab project exists
+- name: Check if Gitlab Project exists
+  uri:
+    url: "{{ gl_url }}/api/v4/projects?private_token={{ gl_token }}&search={{ gl_prj_name }}"
+    method: "GET"
+    validate_certs: "{{ gl_validate_certs }}"
+    status_code: "200"
+  register: gl_prj_exists
+  until: gl_prj_exists.status == 200
+  retries: 5
+  delay: 5
+
+# For validation we need to see if we did or didn't get results on our search and set a fact accordingly
+- name: Set Gitlab Path with Namespace for Validation
+  set_fact:
+    gl_prj_check_path_with_namespace: "{{ gl_prj_group }}/{{ gl_prj_name | lower }}"
+
+- name: Set Gitlab Search Result with Namespace for Validation
+  set_fact:
+    gl_prj_result_path_with_namespace: "{{ gl_prj_exists | json_query('json[*].path_with_namespace') | list }}"
+  when: gl_prj_exists.json | length > 0
+
+- name: Set Gitlab Search Result with Namespace for Validation | No Results
+  set_fact:
+    gl_prj_result_path_with_namespace: ["no_results"]
+  when: gl_prj_exists.json | length < 1
+
+# Create Gitlab project
+- name: Create Gitlab Project
+  uri:
+    url: "{{ gl_url }}/api/v4/projects?private_token={{ gl_token }}"
+    body_format: "raw"
+    method: "POST"
+    validate_certs: "{{ gl_validate_certs }}"
+    body: "name={{ gl_prj_name }}&namespace_id={{ gl_group_obj.json[0].id }}&default_branch={{ gl_prj_def_branch }}&description={{ gl_prj_desc }}&issues_enabled={{ gl_prj_issues }}&merge_requests_enabled={{ gl_prj_merge }}&wiki_enabled={{ gl_prj_wiki }}&snippets_enabled={{ gl_prj_snippets }}&visibility={{ gl_prj_visibility }}"
+    status_code: "201"
+  register: create_prj
+  until: create_prj.status == 201
+  retries: 5
+  delay: 5
+  changed_when: "create_prj.status == 201"
+  when: (gl_prj_check_path_with_namespace not in gl_prj_result_path_with_namespace) or
+        ("no_results" in gl_prj_result_path_with_namespace)
+
+# Capture Gitlab project ID
+- name: Get Gitlab Project id
+  uri:
+    url: "{{ gl_url }}/api/v4/projects?private_token={{ gl_token }}&search={{ gl_prj_name }}&order_by=id&sort=desc"
+    method: "GET"
+    validate_certs: "{{ gl_validate_certs }}"
+    status_code: "200"
+  register: gl_new_prj
+  until: gl_new_prj.status == 200
+  retries: 5
+  delay: 5
+
+- name: Set New Gitlab Search Result with Namespace for Validation
+  set_fact:
+    gl_new_prj_result_path_with_namespace: "{{ gl_new_prj | json_query('json[*].path_with_namespace') | list }}"
+
+# For use in other playbooks/roles we set the new project URL
+# ansible.cfg private_role_vars = yes must not be set to utilize
+- name: Set Gitlab Project URL
+  set_fact:
+    gl_prj_url: "{{ gl_url}}/{{ gl_prj_group }}/{{ gl_prj_name }}.git"
+
+# Get the correct project ID
+- name: Set Gitlab Project ID
+  set_fact:
+    gl_prj_id: "{{ item.id }}"
+  when: gl_prj_check_path_with_namespace == item.path_with_namespace
+  with_items: "{{ gl_new_prj.json }}"
+  loop_control:
+    label: "{{ item.path_with_namespace }}"
+
+# Commit something to the repository when creating new project only when scenario is:
+# 1.) is our [group path]/[proj name] in the new project check list? and is our [group]/[proj name] not in the initial existance check? and do we have content to commit? or
+# 2.) did our first existence check have any results? and is our [group path]/[proj name] in the new project check list? and do we have content to commit?
+- name: Create files in the Gitlab Project
+  include_tasks: "gitlab-content.yml"
+  when: (gl_prj_check_path_with_namespace in gl_new_prj_result_path_with_namespace and gl_prj_check_path_with_namespace not in gl_prj_result_path_with_namespace) or
+        ("no_results" in gl_prj_result_path_with_namespace and gl_prj_check_path_with_namespace in gl_new_prj_result_path_with_namespace and gl_prj_files | length > 0)
+  with_items: "{{ gl_prj_files }}"
+  loop_control:
+    loop_var: file
+
+# Create Gitlab branches in project when we have a list of branches to create and they don't exist already and we're working on the right project
+- name: Create Branches in Gitlab Project
+  include_tasks: "gitlab-branches.yml"
+  when:
+    - gl_prj_branches | length > 0
+    - gl_prj_check_path_with_namespace in gl_new_prj_result_path_with_namespace
+  with_items: "{{ gl_prj_branches }}"
+  loop_control:
+    loop_var: branch
+    label: "{{ branch.name }}"

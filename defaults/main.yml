@@ -1,0 +1,21 @@
+---
+gl_url: ""
+gl_validate_certs: False
+gl_user: ""
+gl_secrets: True
+gl_prj_name: ""
+gl_prj_desc: ""
+gl_prj_group: ""
+gl_prj_files:
+  - "README.md"
+  - "markdown/README.md"
+gl_prj_def_branch: "master"
+gl_prj_branches: []
+gl_prj_visibility: "private"
+gl_prj_wiki: "true"
+gl_prj_snippets: "true"
+gl_prj_issues: "true"
+gl_prj_merge: "true"
+
+#store this in an ansible vault within vars/gitlab-secrets.yml:
+gl_token: ""

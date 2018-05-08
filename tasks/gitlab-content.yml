@@ -1,0 +1,20 @@
+---
+- name: Grab {{ file }} contents
+  set_fact:
+    file_contents: "{{ item }}"
+  with_file: "{{ file }}"
+  no_log: True
+
+- name: Create repository file {{ file }}
+  uri:
+    url: "{{ gl_url }}/api/v4/projects/{{ gl_prj_id }}/repository/files/{{ file | urlencode | regex_replace('/','%2F') }}?private_token={{ gl_token }}"
+    body_format: "raw"
+    method: "POST"
+    validate_certs: "{{ gl_validate_certs }}"
+    body: "branch={{ gl_prj_def_branch }}&content={{ file_contents }}&commit_message=Adding%20{{ file }}"
+    status_code: "201"
+  register: create_file
+  until: create_file.status == 201
+  retries: 5
+  delay: 5
+  changed_when: "create_file.status == 201"
