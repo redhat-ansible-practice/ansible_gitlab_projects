@@ -16,6 +16,13 @@
   retries: 5
   delay: 5
 
+# Ensure we have the correct gitlab group
+- name: Set appropriate Gitlab Group ID
+  set_fact:
+    gl_group_id: "{{ item.id }}"
+  when: item.full_name == gl_prj_group
+  with_items: "{{ gl_group_obj.json }}"
+
 # Check if Gitlab project exists
 - name: Check if Gitlab Project exists
   uri:
@@ -50,7 +57,7 @@
     body_format: "raw"
     method: "POST"
     validate_certs: "{{ gl_validate_certs }}"
-    body: "name={{ gl_prj_name }}&namespace_id={{ gl_group_obj.json[0].id }}&default_branch={{ gl_prj_def_branch }}&description={{ gl_prj_desc }}&issues_enabled={{ gl_prj_issues }}&merge_requests_enabled={{ gl_prj_merge }}&wiki_enabled={{ gl_prj_wiki }}&snippets_enabled={{ gl_prj_snippets }}&visibility={{ gl_prj_visibility }}"
+    body: "name={{ gl_prj_name }}&namespace_id={{ gl_group_id }}&default_branch={{ gl_prj_def_branch }}&description={{ gl_prj_desc }}&issues_enabled={{ gl_prj_issues }}&merge_requests_enabled={{ gl_prj_merge }}&wiki_enabled={{ gl_prj_wiki }}&snippets_enabled={{ gl_prj_snippets }}&visibility={{ gl_prj_visibility }}"
     status_code: "201"
   register: create_prj
   until: create_prj.status == 201
