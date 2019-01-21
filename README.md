@@ -73,5 +73,8 @@ The `gl_prj_url` variable is set and can be used outside of this role for cases 
       gl_prj_issues: "true"
       no_log: True #Please do this to protect your API token
 ```
+## License
+[MIT](LICENSE)
+
 ## Author  
-[Andrew J. Huffman](mailto:ahuffman@redhat.com)
+[Andrew J. Huffman](https://github.com/ahuffman)
