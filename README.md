@@ -1,4 +1,4 @@
-# genie-gitlab-projects
+# gitlab_projects
 ## Description
 A role to create new repositories (projects) in Gitlab, along with pre-populated default content, and protected/unprotected branches if specified.
 ## Variables
@@ -46,9 +46,9 @@ The `gl_prj_url` variable is set and can be used outside of this role for cases 
 ### Standard Role Usage
 ```yaml
 ---
-- hosts: all
+- hosts: "all"
   roles:
-    - role: "genie-gitlab-projects"
+    - role: "gitlab_projects"
       gl_url: "https://mygitlab.foo.bar"
       gl_validate_certs: "false"
       gl_user: "my_api_user"
